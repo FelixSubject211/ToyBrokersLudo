@@ -2,7 +2,7 @@ package aview
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.{Merge, Sink, Source}
 import model.{GameField, Move}
 import util.{Observable, Observer}
 
@@ -15,11 +15,11 @@ import scala.util.{Failure, Success}
 
 class Tui(coreController: CoreController):
   implicit val system: ActorSystem[Any] = ActorSystem(Behaviors.empty, "CoreController")
-  
-  private val sink = Sink.foreach[GameField](println)
-  private val graph = coreController.gameFieldStream().to(sink)
-  graph.run()
-  
+
+  private val gameFieldSource = coreController.gameFieldStream()
+  private val gameFieldSink = Sink.foreach[GameField](println)
+  gameFieldSource.to(gameFieldSink).run()
+
   def inputLoop(): Unit =
     analyseInput(readLine())
     inputLoop()
