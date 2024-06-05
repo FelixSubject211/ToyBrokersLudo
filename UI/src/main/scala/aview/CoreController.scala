@@ -1,5 +1,6 @@
 package aview
 
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
@@ -16,19 +17,16 @@ import util.json.JsonWriters.*
 import util.{Observable, handleResponse, sendHttpRequest}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.util.{Failure, Success}
 
 class CoreController extends Observable:
   implicit val system: ActorSystem[Any] = ActorSystem(Behaviors.empty, "CoreController")
   implicit val executionContext: ExecutionContextExecutor = system.executionContext
 
   establishWebSocketConnection()
-
-  def gameField: Future[GameField] =
-    val request = HttpRequest(uri = "http://core-service:8082/core/gameField")
-    sendHttpRequest(request).flatMap { response =>
-      handleResponse(response)(jsonStr => Json.parse(jsonStr).as[GameField])
-    }
-
+  
+  def gameFieldStream(): Source[GameField, NotUsed] = gameFieldSource
+  
   def possibleMoves: Future[List[Move]] =
     val request = HttpRequest(uri = "http://core-service:8082/core/possibleMoves")
     sendHttpRequest(request).flatMap { response =>
@@ -110,6 +108,14 @@ class CoreController extends Observable:
       handleResponse(response)(jsonStr => Json.parse(jsonStr).as[List[String]])
     }
 
+  private def gameField: Future[GameField] =
+    val request = HttpRequest(uri = "http://core-service:8082/core/gameField")
+    sendHttpRequest(request).flatMap { response =>
+      handleResponse(response)(jsonStr => Json.parse(jsonStr).as[GameField])
+    }
+
+  private val (gameFieldQueue, gameFieldSource) = Source.queue[GameField](bufferSize = 100, overflowStrategy = OverflowStrategy.dropHead).preMaterialize()
+
   private def establishWebSocketConnection(): Future[Unit] = {
     val wsUrl = "ws://core-service:8082/core/changes"
 
@@ -118,7 +124,10 @@ class CoreController extends Observable:
         WebSocketRequest(uri = wsUrl),
         Flow.fromSinkAndSourceMat(
           Sink.foreach[Message] {
-            _ => notifyObservers()
+            _ => gameField.onComplete {
+              case Success(value) => gameFieldQueue.offer(value)
+              case Failure(exception) => println(exception)
+            }
           },
           Source.actorRef[TextMessage](bufferSize = 10, OverflowStrategy.fail)
             .mapMaterializedValue { webSocketIn =>

@@ -1,9 +1,11 @@
 package aview
 
+import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.Behaviors
+import akka.stream.scaladsl.Sink
 import model.{GameField, Move}
 import util.{Observable, Observer}
 
-import scala.compat.Platform
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future}
@@ -11,24 +13,12 @@ import scala.io.StdIn.readLine
 import scala.util.{Failure, Success}
 
 
-class Tui(coreController: CoreController) extends Observer:
-  coreController.add(this)
-  printField()
-
-  override def update(): Unit = printFieldOnMainThread()
-
-  private def printFieldOnMainThread(): Unit = {
-    Future {
-      printField()
-    }
-  }
+class Tui(coreController: CoreController):
+  implicit val system: ActorSystem[Any] = ActorSystem(Behaviors.empty, "CoreController")
   
-  private def printField(): Unit = {
-    coreController.gameField.onComplete {
-      case Success(value) => println(value)
-      case Failure(exception) => println(exception.getMessage)
-    }
-  }
+  private val sink = Sink.foreach[GameField](println)
+  private val graph = coreController.gameFieldStream().to(sink)
+  graph.run()
   
   def inputLoop(): Unit =
     analyseInput(readLine())
