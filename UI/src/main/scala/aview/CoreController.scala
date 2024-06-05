@@ -14,7 +14,7 @@ import model.{GameField, Move}
 import play.api.libs.json.Json
 import util.json.JsonReaders.*
 import util.json.JsonWriters.*
-import util.{Observable, handleResponse, sendHttpRequest}
+import util.{Observable, establishWebSocketConnection, handleResponse, sendHttpRequest}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
@@ -23,8 +23,20 @@ class CoreController extends Observable:
   implicit val system: ActorSystem[Any] = ActorSystem(Behaviors.empty, "CoreController")
   implicit val executionContext: ExecutionContextExecutor = system.executionContext
 
-  establishWebSocketConnection()
-  
+  private val (gameFieldQueue, gameFieldSource) =
+    Source.queue[GameField](
+      bufferSize = 100,
+      overflowStrategy = OverflowStrategy.dropHead
+    ).preMaterialize()
+
+  private val wsUrl = "ws://core-service:8082/core/changes"
+  private val messageHandler: Message => Unit = _ => gameField.onComplete {
+    case Success(value) => gameFieldQueue.offer(value)
+    case Failure(ex) => println(ex)
+  }
+
+  establishWebSocketConnection(wsUrl, messageHandler)
+
   def gameFieldStream(): Source[GameField, NotUsed] = gameFieldSource
   
   def possibleMoves: Future[List[Move]] =
@@ -113,37 +125,3 @@ class CoreController extends Observable:
     sendHttpRequest(request).flatMap { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr).as[GameField])
     }
-
-  private val (gameFieldQueue, gameFieldSource) = Source.queue[GameField](bufferSize = 100, overflowStrategy = OverflowStrategy.dropHead).preMaterialize()
-
-  private def establishWebSocketConnection(): Future[Unit] = {
-    val wsUrl = "ws://core-service:8082/core/changes"
-
-    val (webSocketUpgradeResponse, webSocketOut) =
-      Http().singleWebSocketRequest(
-        WebSocketRequest(uri = wsUrl),
-        Flow.fromSinkAndSourceMat(
-          Sink.foreach[Message] {
-            _ => gameField.onComplete {
-              case Success(value) => gameFieldQueue.offer(value)
-              case Failure(exception) => println(exception)
-            }
-          },
-          Source.actorRef[TextMessage](bufferSize = 10, OverflowStrategy.fail)
-            .mapMaterializedValue { webSocketIn =>
-              system.log.info("WebSocket connected")
-              webSocketIn
-            }
-        )(Keep.both)
-      )
-
-    webSocketUpgradeResponse.flatMap { upgrade =>
-      if (upgrade.response.status == StatusCodes.SwitchingProtocols) {
-        println("WebSocket connection established")
-        Future.successful(())
-      } else {
-        println(s"WebSocket connection failed: ${upgrade.response.status}")
-        throw new RuntimeException(s"WebSocket connection failed: ${upgrade.response.status}")
-      }
-    }
-  }
