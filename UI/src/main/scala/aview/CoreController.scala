@@ -30,9 +30,12 @@ class CoreController extends Observable:
     ).preMaterialize()
 
   private val wsUrl = "ws://core-service:8082/core/changes"
-  private val messageHandler: Message => Unit = _ => gameField.onComplete {
-    case Success(value) => gameFieldQueue.offer(value)
-    case Failure(ex) => println(ex)
+  private val messageHandler: Message => Unit = {
+    case message: TextMessage.Strict =>
+      val text = message.text
+      gameFieldQueue.offer(Json.parse(text).as[GameField])
+    case _ =>
+      println("Received non-strict message")
   }
 
   establishWebSocketConnection(wsUrl, messageHandler)
@@ -118,10 +121,4 @@ class CoreController extends Observable:
     val request = HttpRequest(uri = "http://core-service:8082/core/getTargets")
     sendHttpRequest(request).flatMap { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr).as[List[String]])
-    }
-
-  private def gameField: Future[GameField] =
-    val request = HttpRequest(uri = "http://core-service:8082/core/gameField")
-    sendHttpRequest(request).flatMap { response =>
-      handleResponse(response)(jsonStr => Json.parse(jsonStr).as[GameField])
     }
