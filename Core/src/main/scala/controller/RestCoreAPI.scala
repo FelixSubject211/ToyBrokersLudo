@@ -12,22 +12,28 @@ import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.stream.{ActorMaterializer, OverflowStrategy}
 import controller.impl.{Controller, PersistenceController}
 import model.{GameField, Move}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import play.api.libs.json.Json
 import util.Observer
 import util.json.JsonReaders.*
 import util.json.JsonWriters.*
 
+import java.util.Properties
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
-class RestCoreAPI:
+class RestCoreAPI extends Observer:
   implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "RestCoreAPI")
   implicit val executionContext: ExecutionContextExecutor = system.executionContext
 
   val persistenceController: PersistenceController = PersistenceController()
   
   var controller = new Controller(using persistenceController)
+
+  controller.add(this)
+
+  override def update(): Unit = sendToKafka("game", "field", Json.toJson(controller.getGameField).toString())
 
   private val RestUIPort = 8082
   private val routes: String =
@@ -138,9 +144,6 @@ class RestCoreAPI:
           }
         }
       },
-      path("core" / "changes") {
-        handleWebSocketMessages(websocketChanges)
-      },
       path("core" / "newGame") {
         post {
             try {
@@ -164,24 +167,17 @@ class RestCoreAPI:
         println(s"CoreAPI service failed to start: ${exception.getMessage}")
     }
 
-  private def websocketChanges: Flow[Message, Message, Any] =
-    val incomingMessages: Sink[Message, Any] =
-      Sink.foreach {
-        case message: TextMessage.Strict =>
-        case _ =>
-      }
-    val outgoingMessages: Source[Message, Any] =
-      Source.queue[Message](bufferSize = 10, OverflowStrategy.fail)
-        .mapMaterializedValue { queue =>
-          controller.add(new Observer {
-            override def update(): Unit = {
-              val message = TextMessage.Strict(
-                Json.toJson(controller.getGameField).toString()
-              )
-              queue.offer(message)
-            }
-          })
-        }
-    Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
+  private lazy val kafkaProducer = {
+    val props = new Properties()
+    props.put("bootstrap.servers", "localhost:9092")
+    props.put("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    new KafkaProducer[Array[Byte], String](props)
+  }
+
+  private def sendToKafka(topic: String, key: String, value: String): Unit = {
+    val record = new ProducerRecord[Array[Byte], String](topic, key.getBytes, value)
+    kafkaProducer.send(record)
+  }
 
 

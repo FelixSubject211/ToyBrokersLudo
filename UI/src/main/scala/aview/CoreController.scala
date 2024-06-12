@@ -11,12 +11,22 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import model.{GameField, Move}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import play.api.libs.json.Json
 import util.json.JsonReaders.*
 import util.json.JsonWriters.*
 import util.{Observable, establishWebSocketConnection, handleResponse, sendHttpRequest}
+import java.util.Properties
+import java.util.concurrent.Executors
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import scala.concurrent.{ExecutionContext, Future}
+import scala.collection.JavaConverters._
+import scala.util.{Failure, Success}
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+
+import java.util.Properties
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
 class CoreController extends Observable:
@@ -29,16 +39,32 @@ class CoreController extends Observable:
       overflowStrategy = OverflowStrategy.dropHead
     ).preMaterialize()
 
-  private val wsUrl = "ws://core-service:8082/core/changes"
-  private val messageHandler: Message => Unit = {
-    case message: TextMessage.Strict =>
-      val text = message.text
-      gameFieldQueue.offer(Json.parse(text).as[GameField])
-    case _ =>
-      println("Received non-strict message")
+  consumeFromKafka()
+
+  private def createConsumerConfig(): Properties = {
+    val props = new Properties()
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "game-consumer-group")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    props
   }
 
-  establishWebSocketConnection(wsUrl, messageHandler)
+  private val kafkaConsumer = {
+    val consumer = new KafkaConsumer[Array[Byte], String](createConsumerConfig())
+    consumer.subscribe(java.util.Collections.singletonList("game"))
+    consumer
+  }
+
+  private def consumeFromKafka()(implicit ec: ExecutionContext): Future[Unit] = Future {
+    while (true) {
+      val records = kafkaConsumer.poll(java.time.Duration.ofMillis(1000)).asScala
+      for (record <- records) {
+        println(s"Received message: (key: ${new String(record.key)}, value: ${record.value}) at offset ${record.offset}")
+      }
+    }
+  }
 
   def gameFieldStream(): Source[GameField, NotUsed] = gameFieldSource
   

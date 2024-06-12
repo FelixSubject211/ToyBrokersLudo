@@ -11,6 +11,7 @@ val akkaActorVersion = "2.8.0"
 val slickVersion = "3.5.0-M3"
 val postgresqlVersion = "42.5.4"
 val mongoVersion = "4.8.0"
+val kafkaClientsVersion = "3.4.0"
 
 ThisBuild / version := "1.0"
 ThisBuild / scalaVersion := "3.1.2"
@@ -35,7 +36,7 @@ lazy val ui = project
   .dependsOn(model, tools)
   .settings(
     name := "UI",
-    version:="0.1.0-SNAPSHOT",
+    version := "0.1.0-SNAPSHOT",
     dockerBaseImage := "adoptopenjdk:11-jre-hotspot",
     dockerExposedPorts := Seq(8090),
     commonSettings,
@@ -46,7 +47,7 @@ lazy val core = project
   .dependsOn(model, tools)
   .settings(
     name := "Core",
-    version:="0.1.0-SNAPSHOT",
+    version := "0.1.0-SNAPSHOT",
     dockerBaseImage := "adoptopenjdk:11-jre-hotspot",
     dockerExposedPorts := Seq(8082),
     commonSettings,
@@ -57,7 +58,7 @@ lazy val persistence = project
   .dependsOn(model, tools)
   .settings(
     name := "Persistence",
-    version:="0.1.0-SNAPSHOT",
+    version := "0.1.0-SNAPSHOT",
     dockerBaseImage := "adoptopenjdk:11-jre-hotspot",
     dockerExposedPorts := Seq(8081),
     commonSettings,
@@ -97,6 +98,7 @@ lazy val commonSettings: Seq[Def.Setting[?]] = Seq(
     "com.typesafe.slick" %% "slick" % slickVersion cross CrossVersion.for3Use2_13,
     "org.postgresql" % "postgresql" % postgresqlVersion,
     "org.mongodb.scala" %% "mongo-scala-driver" % mongoVersion cross CrossVersion.for3Use2_13,
+    "org.apache.kafka" % "kafka-clients" % kafkaClientsVersion,
     ("io.gatling.highcharts" % "gatling-charts-highcharts" % "3.9.5" % "test").withExclusions(gatlingExclude),
     ("io.gatling" % "gatling-test-framework" % "3.9.5" % "test").withExclusions(gatlingExclude)
   ))
