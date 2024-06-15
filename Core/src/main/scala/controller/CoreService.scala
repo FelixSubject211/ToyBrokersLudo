@@ -51,7 +51,7 @@ class CoreService(controller: Controller) extends Observer {
   controller.add(this)
 
   private val producerSettings = ProducerSettings(system, new StringSerializer, new StringSerializer)
-    .withBootstrapServers("localhost:9092")
+    .withBootstrapServers("kafka1:9092")
 
   private val kafkaSink = Producer.plainSink(producerSettings)
 

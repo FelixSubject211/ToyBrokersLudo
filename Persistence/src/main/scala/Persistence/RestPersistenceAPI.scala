@@ -21,7 +21,7 @@ class RestPersistenceAPI(using fileIO: FileIO)(using database: DAOInterface):
   implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "RestPersistenceAPI")
   implicit val executionContext: ExecutionContextExecutor = system.executionContext
   
-  private val RestUIPort = 8081
+  private val RestUIPort = 8080
   private val routes: String =
     """
       <h1>Welcome to the REST Persistence API service!</h1>

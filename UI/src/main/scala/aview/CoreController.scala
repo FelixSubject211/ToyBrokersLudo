@@ -33,7 +33,7 @@ class CoreController:
   private val topic = Topics.GameTopic
 
   private val consumerSettings = ConsumerSettings(system, new StringDeserializer, new StringDeserializer)
-    .withBootstrapServers("localhost:9092")
+    .withBootstrapServers("kafka1:9092")
     .withGroupId("KafkaCoreController")
     .withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "KafkaCoreController-id")
 
@@ -58,7 +58,7 @@ class CoreController:
   def gameFieldStream(): Source[GameField, NotUsed] = gameFieldSource
 
   def possibleMoves: Future[List[Move]] =
-    val request = HttpRequest(uri = "http://localhost:8082/core/possibleMoves")
+    val request = HttpRequest(uri = "http://core-service:8082/core/possibleMoves")
     sendHttpRequest(request).flatMap { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr).as[List[Move]])
     }
@@ -67,7 +67,7 @@ class CoreController:
     val jsonBody = Json.toJson(move).toString()
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/move",
+      uri = s"http://core-service:8082/core/move",
       entity = HttpEntity(ContentTypes.`application/json`, jsonBody)
     )
     sendHttpRequest(request).map { response =>
@@ -77,7 +77,7 @@ class CoreController:
   def dice(): Future[Unit] =
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/dice"
+      uri = s"http://core-service:8082/core/dice"
     )
     sendHttpRequest(request).map { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr))
@@ -86,7 +86,7 @@ class CoreController:
   def undo(): Future[Unit] =
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/undo"
+      uri = s"http://core-service:8082/core/undo"
     )
     sendHttpRequest(request).map { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr))
@@ -95,7 +95,7 @@ class CoreController:
   def redo(): Future[Unit] =
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/redo"
+      uri = s"http://core-service:8082/core/redo"
     )
     sendHttpRequest(request).map { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr))
@@ -104,7 +104,7 @@ class CoreController:
   def save(fileName: String): Future[Unit] = {
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = "http://localhost:8082/core/save",
+      uri = "http://core-service:8082/core/save",
       entity = HttpEntity(ContentTypes.`application/json`, fileName)
     )
     sendHttpRequest(request).map { response =>
@@ -115,7 +115,7 @@ class CoreController:
   def load(fileName: String): Future[Unit] =
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/load",
+      uri = s"http://core-service:8082/core/load",
       entity = HttpEntity(ContentTypes.`application/json`, fileName)
     )
     sendHttpRequest(request).map { response =>
@@ -125,7 +125,7 @@ class CoreController:
   def newGame(): Future[Unit] =
     val request = HttpRequest(
       method = HttpMethods.POST,
-      uri = s"http://localhost:8082/core/newGame",
+      uri = s"http://core-service:8082/core/newGame",
       entity = HttpEntity(ContentTypes.`application/json`, "")
     )
     sendHttpRequest(request).map { response =>
