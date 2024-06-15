@@ -1,7 +1,7 @@
 import com.typesafe.sbt.packager.Keys.{dockerBaseImage, dockerExposedPorts}
 import sbt.librarymanagement.InclExclRule
 
-val scala3Version = "3.1.2"
+val scala3Version = "3.2.2"
 val scalacticVersion = "3.2.17"
 val scalatestVersion = "3.2.17"
 val scalaSwingVersion = "3.0.0"
@@ -14,7 +14,7 @@ val mongoVersion = "4.8.0"
 val kafkaClientsVersion = "3.4.0"
 
 ThisBuild / version := "1.0"
-ThisBuild / scalaVersion := "3.1.2"
+ThisBuild / scalaVersion := "3.2.2"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / fork := true
 
@@ -79,7 +79,11 @@ lazy val model = project
     commonSettings
   )
 
-val gatlingExclude = Seq(("com.typesafe.akka", "akka-actor_2.13"), ("org.scala-lang.modules", "scala-java8-compat_2.13"), ("com.typesafe.akka","akka-slf4j_2.13")).toVector.map((org_name: Tuple2[String,String]) => InclExclRule(org_name._1, org_name._2))
+val gatlingExclude = Seq(
+  ("com.typesafe.akka", "akka-actor_2.13"),
+  ("org.scala-lang.modules", "scala-java8-compat_2.13"),
+  ("com.typesafe.akka","akka-slf4j_2.13")
+).toVector.map((org_name: Tuple2[String,String]) => InclExclRule(org_name._1, org_name._2))
 
 lazy val commonSettings: Seq[Def.Setting[?]] = Seq(
   scalaVersion := scala3Version,
@@ -100,7 +104,8 @@ lazy val commonSettings: Seq[Def.Setting[?]] = Seq(
     "org.mongodb.scala" %% "mongo-scala-driver" % mongoVersion cross CrossVersion.for3Use2_13,
     "org.apache.kafka" % "kafka-clients" % kafkaClientsVersion,
     ("io.gatling.highcharts" % "gatling-charts-highcharts" % "3.9.5" % "test").withExclusions(gatlingExclude),
-    ("io.gatling" % "gatling-test-framework" % "3.9.5" % "test").withExclusions(gatlingExclude)
+    ("io.gatling" % "gatling-test-framework" % "3.9.5" % "test").withExclusions(gatlingExclude),
+    "com.typesafe.akka" %% "akka-stream-kafka" % "4.0.2",
   ))
 
 lazy val coverage: Seq[Def.Setting[?]] = Seq(

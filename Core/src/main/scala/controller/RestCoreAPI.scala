@@ -23,14 +23,10 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
-class RestCoreAPI extends Observer:
+class RestCoreAPI(controller: Controller) extends Observer:
   implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "RestCoreAPI")
   implicit val executionContext: ExecutionContextExecutor = system.executionContext
-
-  val persistenceController: PersistenceController = PersistenceController()
   
-  var controller = new Controller(using persistenceController)
-
   controller.add(this)
 
   override def update(): Unit = sendToKafka("game", "field", Json.toJson(controller.getGameField).toString())
