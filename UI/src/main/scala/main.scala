@@ -1,6 +1,6 @@
-import aview.{KafkaCoreController, RestCoreController, Tui}
+import aview.{CoreController, Tui}
 
 @main def ui(): Unit =
-  val coreController = KafkaCoreController()
+  val coreController = CoreController()
   val tui = Tui(coreController)
   tui.inputLoop()

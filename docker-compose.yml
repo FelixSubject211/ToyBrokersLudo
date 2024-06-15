@@ -98,17 +98,5 @@ services:
     environment:
       DISPLAY: $DISPLAY
 
-  ui2:
-    image: ui:0.1.0-SNAPSHOT
-    stdin_open: true
-    tty: true
-    container_name: ui-service2
-    depends_on:
-      - core
-    networks:
-      - my_network
-    environment:
-      DISPLAY: $DISPLAY
-
 networks:
   my_network:
