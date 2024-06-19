@@ -133,7 +133,7 @@ class CoreController:
     }
 
   def getTargets: Future[List[String]] =
-    val request = HttpRequest(uri = "http://localhost:8082/core/getTargets")
+    val request = HttpRequest(uri = "http://core-service:8082/core/getTargets")
     sendHttpRequest(request).flatMap { response =>
       handleResponse(response)(jsonStr => Json.parse(jsonStr).as[List[String]])
     }
