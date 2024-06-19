@@ -1,5 +1,23 @@
 package controller
 
+import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.Behaviors
+import akka.kafka.scaladsl.{Consumer, Producer}
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
+import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.{Materializer, SystemMaterializer}
+import controller.impl.{Controller, PersistenceController}
+import model.kafka.Topics
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import play.api.libs.json.Json
+import util.Observer
+import util.Observer
+import util.json.JsonReaders.*
+import util.json.JsonWriters.*
+
+
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
@@ -21,31 +39,51 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
-class RestCoreAPI:
-  implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "RestCoreAPI")
-  implicit val executionContext: ExecutionContextExecutor = system.executionContext
+import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Success}
 
-  val persistenceController: PersistenceController = PersistenceController()
-  
-  var controller = new Controller(using persistenceController)
+class CoreService(controller: Controller) extends Observer {
+  implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "KafkaCoreService")
+  implicit val executionContext: ExecutionContext = system.executionContext
+  implicit val materializer: Materializer = SystemMaterializer(system).materializer
+
+  private val topic = Topics.GameTopic
+  controller.add(this)
+
+  private val producerSettings = ProducerSettings(system, new StringSerializer, new StringSerializer)
+    .withBootstrapServers("kafka1:9092")
+
+  private val kafkaSink = Producer.plainSink(producerSettings)
+
+  override def update(): Unit = {
+    val record = new ProducerRecord[String, String](
+      topic.toString,
+      topic.UpdateGameKey.toString,
+      Json.toJson(controller.getGameField).toString()
+    )
+    Source.single(record).runWith(kafkaSink).onComplete {
+      case Success(_) => println("New GameField successfully sent to Kafka")
+      case Failure(exception) => println(s"Failed to send message to Kafka: ${exception.getMessage}")
+    }
+  }
 
   private val RestUIPort = 8082
   private val routes: String =
     """
-      <h1>Welcome to the REST Core API service!</h1>
-      <h2>Available routes:</h2>
+        <h1>Welcome to the REST Core API service!</h1>
+        <h2>Available routes:</h2>
 
-      <p><a href="/core/possibleMoves">GET       ->     core/possibleMoves</a></p>
-      <p><a href="/core/getTargets">GET          ->     core/getTargets</a></p>
-      <p><a href="/core/move">POST               ->     core/move</a></p>
-      <p><a href="/core/dice">POST               ->     core/dice</a></p>
-      <p><a href="/core/undo">POST               ->     core/undo</a></p>
-      <p><a href="/core/redo">POST               ->     core/redo</a></p>
-      <p><a href="/core/save">POST               ->     core/save</a></p>
-      <p><a href="/core/load">POST               ->     core/load</a></p>
-      <p><a href="/core/newGame">POST            ->     core/newGame</a></p>
-      <br>
-    """.stripMargin
+        <p><a href="/core/possibleMoves">GET       ->     core/possibleMoves</a></p>
+        <p><a href="/core/getTargets">GET          ->     core/getTargets</a></p>
+        <p><a href="/core/move">POST               ->     core/move</a></p>
+        <p><a href="/core/dice">POST               ->     core/dice</a></p>
+        <p><a href="/core/undo">POST               ->     core/undo</a></p>
+        <p><a href="/core/redo">POST               ->     core/redo</a></p>
+        <p><a href="/core/save">POST               ->     core/save</a></p>
+        <p><a href="/core/load">POST               ->     core/load</a></p>
+        <p><a href="/core/newGame">POST            ->     core/newGame</a></p>
+        <br>
+      """.stripMargin
 
   private val route =
     concat(
@@ -138,19 +176,16 @@ class RestCoreAPI:
           }
         }
       },
-      path("core" / "changes") {
-        handleWebSocketMessages(websocketChanges)
-      },
       path("core" / "newGame") {
         post {
-            try {
-              controller.deleteGame()
-              complete(HttpResponse(StatusCodes.OK, entity = ""))
-            } catch {
-              case ex: Exception =>
-                complete(HttpResponse(StatusCodes.Conflict, entity = ex.getMessage))
-            }
+          try {
+            controller.deleteGame()
+            complete(HttpResponse(StatusCodes.OK, entity = ""))
+          } catch {
+            case ex: Exception =>
+              complete(HttpResponse(StatusCodes.Conflict, entity = ex.getMessage))
           }
+        }
       },
     )
 
@@ -163,25 +198,4 @@ class RestCoreAPI:
       case Failure(exception) =>
         println(s"CoreAPI service failed to start: ${exception.getMessage}")
     }
-
-  private def websocketChanges: Flow[Message, Message, Any] =
-    val incomingMessages: Sink[Message, Any] =
-      Sink.foreach {
-        case message: TextMessage.Strict =>
-        case _ =>
-      }
-    val outgoingMessages: Source[Message, Any] =
-      Source.queue[Message](bufferSize = 10, OverflowStrategy.fail)
-        .mapMaterializedValue { queue =>
-          controller.add(new Observer {
-            override def update(): Unit = {
-              val message = TextMessage.Strict(
-                Json.toJson(controller.getGameField).toString()
-              )
-              queue.offer(message)
-            }
-          })
-        }
-    Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
-
-
+}
