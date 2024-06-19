@@ -23,5 +23,9 @@ The game can be controlled using various commands inputted through the console. 
 - `save`: Save the current game state to a file.
 - `newGame`: Start a new game.
 
+## Component Diagram
+
+![Component Diagram](arch.svg)
+
 ## Coveralls
 https://coveralls.io/github/Julz124

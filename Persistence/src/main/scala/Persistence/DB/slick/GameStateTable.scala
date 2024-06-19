@@ -15,3 +15,9 @@ class GameStateTable(tag: Tag) extends Table[(Option[Int], Boolean, Int, String)
 
   def * = (id, shouldDice, diceNumber, currentPlayer)
 }
+
+
+
+
+
+
